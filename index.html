@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>報告 YAML 產生器</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#1c1c2e;--ink2:#555570;--ink3:#999ab8;
+  --line:#e4e4f0;--bg:#f5f5fb;--white:#fff;
+  --accent:#5b5ef4;--accent-l:#eeeeff;--accent-d:#3d3fb8;
+  --green:#22c55e;--green-l:#f0fdf4;
+  --amber:#f59e0b;--amber-l:#fffbeb;
+  --red:#ef4444;--red-l:#fef2f2;
+  --mono:'Courier New',monospace;
+  --r:10px;--r-sm:6px
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+
+/* ── SHELL ── */
+.shell{display:flex;min-height:100vh}
+.sidebar{width:210px;flex-shrink:0;background:var(--white);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+.logo{padding:20px 18px 16px;font-size:13px;font-weight:700;color:var(--accent);border-bottom:1px solid var(--line)}
+.logo span{color:var(--ink);font-weight:400}
+.nav{padding:10px 0;flex:1}
+.nav-i{display:flex;align-items:center;gap:9px;padding:9px 18px;font-size:13px;color:var(--ink2);cursor:pointer;border-left:3px solid transparent;transition:all .15s;user-select:none}
+.nav-i:hover{color:var(--ink);background:var(--bg)}
+.nav-i.on{color:var(--accent);border-left-color:var(--accent);background:var(--accent-l);font-weight:600}
+.nav-i.ok{color:var(--green)}
+.nav-i.ok .ndot{background:var(--green)}
+.ndot{width:7px;height:7px;border-radius:50%;background:var(--ink3);flex-shrink:0;transition:background .15s}
+.nav-i.on .ndot{background:var(--accent)}
+.main{flex:1;padding:36px 44px;max-width:900px}
+
+/* ── PAGES ── */
+.page{display:none}.page.on{display:block}
+.ptitle{font-size:20px;font-weight:700;margin-bottom:3px}
+.psub{font-size:13px;color:var(--ink2);margin-bottom:26px;line-height:1.6}
+
+/* ── SECTION LABEL ── */
+.slabel{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);margin:22px 0 8px}
+.slabel:first-child{margin-top:0}
+
+/* ── CARDS GRID ── */
+.grid{display:grid;gap:9px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.ga{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+
+.card{background:var(--white);border:1.5px solid var(--line);border-radius:var(--r);padding:13px 15px;cursor:pointer;transition:border-color .15s,background .15s;position:relative;user-select:none}
+.card:hover{border-color:var(--accent)}
+.card.on{border-color:var(--accent);background:var(--accent-l)}
+.card.on::after{content:'✓';position:absolute;top:8px;right:10px;font-size:11px;font-weight:700;color:var(--accent)}
+.c-icon{font-size:22px;margin-bottom:5px}
+.c-title{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:2px}
+.c-desc{font-size:11px;color:var(--ink2);line-height:1.5}
+.c-meta{font-size:11px;color:var(--accent);margin-top:5px;font-weight:500}
+.c-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;margin-top:5px}
+.badge-ref{background:#fde8e8;color:#b91c1c}
+.badge-noref{background:var(--green-l);color:#15803d}
+.badge-opt{background:var(--amber-l);color:#92400e}
+
+/* ── FORM ── */
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg.full{grid-column:1/-1}
+.fg label{font-size:11px;font-weight:700;color:var(--ink2);letter-spacing:.03em;text-transform:uppercase}
+.fg input,.fg select,.fg textarea{padding:8px 11px;border:1.5px solid var(--line);border-radius:var(--r-sm);font-size:13px;color:var(--ink);background:var(--white);outline:none;transition:border-color .15s;font-family:inherit}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--accent)}
+.fg textarea{resize:vertical;min-height:68px;line-height:1.6}
+
+/* ── PILLS ── */
+.pills{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:4px}
+.pill{padding:5px 13px;border-radius:20px;border:1.5px solid var(--line);font-size:12px;font-weight:600;cursor:pointer;color:var(--ink2);background:var(--white);transition:all .15s}
+.pill:hover{border-color:var(--accent);color:var(--accent)}
+.pill.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ── INFO BOXES ── */
+.info{padding:10px 13px;border-radius:var(--r-sm);font-size:12px;line-height:1.6;margin-top:12px}
+.info-g{background:var(--green-l);border-left:3px solid var(--green);color:#166534}
+.info-a{background:var(--amber-l);border-left:3px solid var(--amber);color:#78350f}
+.info-b{background:var(--accent-l);border-left:3px solid var(--accent);color:#3730a3}
+
+/* ── YAML OUTPUT ── */
+.yaml-wrap{background:#1a1a2e;border-radius:var(--r);overflow:hidden;margin-bottom:16px}
+.yaml-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#13132a;border-bottom:1px solid #2a2a4a}
+.yaml-fname{font-size:12px;color:#7c7cb8;font-family:var(--mono)}
+.yaml-body{padding:20px;font-family:var(--mono);font-size:12.5px;line-height:1.8;color:#cdd6f4;overflow-x:auto;white-space:pre;max-height:520px;overflow-y:auto}
+
+/* ── CHIPS SUMMARY ── */
+.chips{display:flex;flex-wrap:wrap;gap:7px;padding:13px 16px;background:var(--white);border:1.5px solid var(--line);border-radius:var(--r);margin-bottom:18px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:4px 11px;border-radius:20px;background:var(--accent-l);color:var(--accent-d)}
+
+/* ── BTNS ── */
+.btnrow{display:flex;gap:9px;margin-top:26px;justify-content:flex-end}
+.btn{padding:9px 20px;border-radius:var(--r-sm);font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid var(--line);background:var(--white);color:var(--ink);transition:all .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn-p{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-p:hover{background:var(--accent-d);border-color:var(--accent-d);color:#fff}
+.btn-dark{background:#1a1a2e;border-color:#1a1a2e;color:#cdd6f4}
+.btn-dark:hover{background:#13132a;color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:22px;right:22px;background:var(--green);color:#fff;padding:9px 18px;border-radius:var(--r-sm);font-size:13px;font-weight:600;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;z-index:9999}
+#toast.show{opacity:1;transform:translateY(0)}
+
+@media(max-width:680px){.sidebar{display:none}.main{padding:18px}.g2,.g3{grid-template-columns:1fr}.fgrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ── SIDEBAR ── -->
+<nav class="sidebar">
+  <div class="logo">📄 YAML 產生器<br><span>報告 &amp; 簡報資料整理</span></div>
+  <div class="nav">
+    <div class="nav-i on" id="n0" onclick="go(0)"><span class="ndot"></span>受眾設定</div>
+    <div class="nav-i" id="n1" onclick="go(1)"><span class="ndot"></span>報告類型</div>
+    <div class="nav-i" id="n2" onclick="go(2)"><span class="ndot"></span>細項 &amp; 架構</div>
+    <div class="nav-i" id="n3" onclick="go(3)"><span class="ndot"></span>簡報設定</div>
+    <div class="nav-i" id="n4" onclick="go(4)"><span class="ndot"></span>基本資料</div>
+    <div class="nav-i" id="n5" onclick="go(5)"><span class="ndot"></span>輸出 YAML</div>
+  </div>
+</nav>
+
+<!-- ── MAIN ── -->
+<main class="main">
+
+<!-- ══ P0 受眾 ══ -->
+<div class="page on" id="p0">
+  <div class="ptitle">設定目標受眾</div>
+  <div class="psub">選擇受眾身分、年齡層與組織角色，YAML 架構語氣與深度將對應調整</div>
+
+  <div class="slabel">受眾身分</div>
+  <div class="grid g3" id="g-identity"></div>
+
+  <div id="age-wrap" style="display:none">
+    <div class="slabel">年齡層</div>
+    <div class="grid ga" id="g-age"></div>
+  </div>
+
+  <div id="role-wrap" style="display:none">
+    <div class="slabel" id="role-label">組織角色 / 職務層級</div>
+    <div class="grid ga" id="g-role"></div>
+  </div>
+
+  <div id="travel-group-wrap" style="display:none">
+    <div class="slabel">出遊組織型態</div>
+    <div class="grid g3" id="g-travel-group"></div>
+  </div>
+
+  <div class="btnrow">
+    <button class="btn btn-p" id="btn01" onclick="go(1)" disabled>下一步 →</button>
+  </div>
+</div>
+
+<!-- ══ P1 類型 ══ -->
+<div class="page" id="p1">
+  <div class="ptitle">選擇報告類型</div>
+  <div class="psub">共 7 種專屬類型，依你的實際使用場景設計</div>
+  <div class="grid g3" id="g-cat"></div>
+  <div class="btnrow">
+    <button class="btn" onclick="go(0)">← 上一步</button>
+    <button class="btn btn-p" id="btn12" onclick="go(2)" disabled>下一步 →</button>
+  </div>
+</div>
+
+<!-- ══ P2 細項 ══ -->
+<div class="page" id="p2">
+  <div class="ptitle" id="p2-title">選擇細項類型</div>
+  <div class="psub" id="p2-sub"></div>
+  <div class="grid g2" id="g-type"></div>
+  <div id="p2-info"></div>
+
+  <div id="cit-wrap" style="display:none;margin-top:20px">
+    <div class="slabel">引用 / 參考文獻格式</div>
+    <div class="pills" id="g-cit"></div>
+  </div>
+
+  <div class="btnrow">
+    <button class="btn" onclick="go(1)">← 上一步</button>
+    <button class="btn btn-p" id="btn23" onclick="go(3)" disabled>下一步 →</button>
+  </div>
+</div>
+
+<!-- ══ P3 簡報設定 ══ -->
+<div class="page" id="p3">
+  <div class="ptitle">簡報內容架構設定</div>
+  <div class="psub">這份資料整理是否要搭配簡報？選擇簡報類型後，YAML 會加入對應的投影片架構欄位</div>
+
+  <div class="slabel">是否製作簡報？</div>
+  <div class="grid ga" style="margin-bottom:16px" id="g-pptyn"></div>
+
+  <div id="ppt-detail" style="display:none">
+    <div class="slabel">簡報類型</div>
+    <div class="grid g2" id="g-ppttype"></div>
+    <div class="slabel" style="margin-top:20px">投影片數量範圍</div>
+    <div class="pills" id="g-slides"></div>
+    <div class="slabel" style="margin-top:20px">簡報場合</div>
+    <div class="pills" id="g-venue"></div>
+  </div>
+
+  <div class="btnrow">
+    <button class="btn" onclick="go(2)">← 上一步</button>
+    <button class="btn btn-p" id="btn34" onclick="go(4)">下一步 →</button>
+  </div>
+</div>
+
+<!-- ══ P4 基本資料 ══ -->
+<div class="page" id="p4">
+  <div class="ptitle">填寫基本資料</div>
+  <div class="psub">僅標題與作者為必填；其餘欄位留白則不寫入 YAML</div>
+
+  <div class="slabel" style="margin-top:0">必填欄位</div>
+  <div class="fgrid" style="margin-bottom:6px">
+    <div class="fg full">
+      <label>報告 / 論文標題 <span style="color:#ef4444">*</span></label>
+      <input type="text" id="f-title" placeholder="輸入完整標題" oninput="checkP4()">
+    </div>
+    <div class="fg full">
+      <label>作者姓名 <span style="color:#ef4444">*</span></label>
+      <input type="text" id="f-author" placeholder="姓名" oninput="checkP4()">
+    </div>
+  </div>
+  <div id="f-required-hint" style="font-size:11px;color:#ef4444;margin-bottom:18px;display:none">請填寫標題與作者姓名後才能產生 YAML</div>
+
+  <div class="slabel">選填欄位 <span style="font-size:10px;font-weight:400;color:var(--ink3)">— 留白即不寫入</span></div>
+  <div class="fgrid">
+    <div class="fg"><label>副標題</label><input type="text" id="f-sub" placeholder="留白則略過"></div>
+    <div class="fg"><label>所屬學校 / 單位</label><input type="text" id="f-org" placeholder="留白則略過"></div>
+    <div class="fg"><label>指導教授 / 主管</label><input type="text" id="f-advisor" placeholder="留白則略過"></div>
+    <div class="fg"><label>日期</label><input type="date" id="f-date"></div>
+    <div class="fg"><label>機密等級</label>
+      <select id="f-conf">
+        <option value="">— 不設定 —</option>
+        <option value="public">公開</option>
+        <option value="internal">內部使用</option>
+        <option value="confidential">機密</option>
+      </select>
+    </div>
+    <div class="fg"><label>語言</label>
+      <select id="f-lang">
+        <option value="">— 不設定 —</option>
+        <option value="zh-TW">繁體中文</option>
+        <option value="en-US">英文</option>
+        <option value="zh-TW+en">中英對照</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="slabel">關鍵字 <span style="font-size:10px;font-weight:400;color:var(--ink3)">— 系統自動提取，有補充則優先採用</span></div>
+  <input type="text" id="f-kw" placeholder="留白 → 系統依文章內容自動提取；有填寫則覆蓋" style="width:100%;padding:8px 11px;border:1.5px solid var(--line);border-radius:var(--r-sm);font-size:13px;color:var(--ink);background:var(--white);outline:none;font-family:inherit;margin-bottom:16px;transition:border-color .15s" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--line)'">
+
+  <div class="slabel">其他需求 <span style="font-size:10px;font-weight:400;color:var(--ink3)">— 對報告的額外指定條件，留白則略過</span></div>
+  <textarea id="f-other" placeholder="例：需含圖表、需中英對照注釋、特定章節要加強、參考格式有特殊要求…" style="width:100%;padding:8px 11px;border:1.5px solid var(--line);border-radius:var(--r-sm);font-size:13px;color:var(--ink);background:var(--white);outline:none;font-family:inherit;resize:vertical;min-height:80px;line-height:1.6;transition:border-color .15s" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--line)'"></textarea>
+
+  <div class="btnrow" style="margin-top:20px">
+    <button class="btn" onclick="go(3)">← 上一步</button>
+    <button class="btn btn-p" id="btn-gen" onclick="tryGenerate()" disabled>產生 YAML →</button>
+  </div>
+</div>
+
+<!-- ══ P5 輸出 ══ -->
+<div class="page" id="p5">
+  <div class="ptitle">YAML 輸出結果</div>
+  <div class="psub">複製後貼入你的工作流程、AI 提示詞或文字編輯器</div>
+  <div class="chips" id="chips"></div>
+  <div class="yaml-wrap">
+    <div class="yaml-bar">
+      <span class="yaml-fname" id="yaml-fname">report.yaml</span>
+      <button class="btn btn-dark" style="padding:5px 14px;font-size:12px" onclick="copyYAML()">複製</button>
+    </div>
+    <div class="yaml-body" id="yaml-out"></div>
+  </div>
+  <div class="btnrow">
+    <button class="btn" onclick="go(0)">← 重新開始</button>
+    <button class="btn" onclick="go(4)">← 修改資料</button>
+    <button class="btn btn-dark" onclick="copyYAML()">複製 YAML</button>
+  </div>
+</div>
+
+</main>
+</div>
+<div id="toast">✓ 已複製到剪貼簿</div>
+
+<script>
+// ════════════════════════════════════════
+// DATA
+// ════════════════════════════════════════
+
+const IDENTITY = [
+  {id:'student',    label:'學生',       desc:'大學生 / 碩士生 / 博士生'},
+  {id:'teacher',    label:'教師 / 講師', desc:'課程設計、教材編寫'},
+  {id:'researcher', label:'研究人員',    desc:'學術研究、論文撰寫'},
+  {id:'engineer',   label:'工程師 / 技術人員', desc:'工業、品質、安衛領域'},
+  {id:'manager',    label:'管理 / 企劃人員', desc:'商業、行銷、專案管理'},
+  {id:'traveler',   label:'旅遊從業 / 導覽', desc:'旅遊規劃、導覽手冊'}
+];
+
+const AGE = [
+  {id:'child',   label:'兒童',       desc:'6–12 歲'},
+  {id:'teen',    label:'青少年',     desc:'13–18 歲'},
+  {id:'young',   label:'青年',       desc:'19–35 歲'},
+  {id:'mid',     label:'中壯年',     desc:'36–59 歲'},
+  {id:'senior',  label:'銀髮族',     desc:'60 歲以上'},
+  {id:'mixed',   label:'多元混齡',   desc:'不限年齡層'}
+];
+
+const ROLE = [
+  {id:'self',      label:'個人 / 自學',    desc:'自行研究或學習'},
+  {id:'peer',      label:'同儕 / 同學',    desc:'班級、小組成員'},
+  {id:'professor', label:'教授 / 指導老師', desc:'學術指導與審核'},
+  {id:'boss',      label:'主管 / 決策者',  desc:'公司管理層'},
+  {id:'client',    label:'客戶 / 業主',    desc:'外部委託方'},
+  {id:'public',    label:'一般大眾',       desc:'不特定多數受眾'},
+  {id:'org',       label:'組織 / 機構',    desc:'機關、協會、學校'}
+];
+
+const TRAVEL_GROUP = [
+  {id:'couple',   label:'兩人世界',   desc:'情侶 / 夫妻，浪漫行程優先',   icon:'💑'},
+  {id:'solo',     label:'單身旅遊',   desc:'個人自由行，彈性最大',         icon:'🧳'},
+  {id:'family',   label:'小家庭',     desc:'父母 + 子女，親子友善為主',    icon:'👨‍👩‍👧‍👦'},
+  {id:'clan',     label:'大家族',     desc:'三代同堂 / 多家庭聯合出遊',    icon:'🏘️'},
+  {id:'friends',  label:'朋友揪團',   desc:'同學 / 朋友群，活動多元豐富',  icon:'👯'},
+  {id:'seniors',  label:'銀髮族團',   desc:'長輩為主，步調輕鬆無障礙',     icon:'🧓'},
+  {id:'school',   label:'學校 / 研習', desc:'校外教學、畢業旅行、研習營',   icon:'🏫'}
+];
+
+const CATS = [
+  {id:'academic', label:'學術研究', icon:'🎓', req_ref:true,
+   desc:'碩士論文、學術報告、文獻研究',
+   types:[
+    {id:'ac-thesis',  label:'碩士 / 學位論文', desc:'完整學位論文，含五章架構', model:'IMRAD五章', wc:'15000–80000', src:30, cits:['APA_7','MLA_9','Chicago_17','IEEE','GB_T_7714']},
+    {id:'ac-paper',   label:'學術研究論文',    desc:'期刊論文、研討會論文', model:'IMRAD', wc:'3000–8000', src:15, cits:['APA_7','MLA_9','Chicago_17','IEEE','GB_T_7714']},
+    {id:'ac-review',  label:'文獻綜述報告',    desc:'系統性整理既有研究', model:'thematic_review', wc:'2000–6000', src:20, cits:['APA_7','MLA_9','Chicago_17']},
+    {id:'ac-case',    label:'學術個案研究',    desc:'深度分析單一案例', model:'case_study', wc:'2500–7000', src:10, cits:['APA_7','MLA_9','Chicago_17']}
+  ]},
+  {id:'education', label:'教育培訓', icon:'📚', req_ref:false,
+   desc:'教材、題庫、測驗設計',
+   types:[
+    {id:'ed-material', label:'教學講義 / 教材', desc:'課程講義、學習手冊', model:'instructional', wc:'800–3000', src:3, cits:['APA_7','none']},
+    {id:'ed-quiz',     label:'題庫 / 測驗設計', desc:'選擇題、問答題、評量卷', model:'assessment', wc:'依題數', src:0, cits:['none']},
+    {id:'ed-training', label:'培訓課程規劃',    desc:'訓練計畫、學習成效評估', model:'kirkpatrick', wc:'1000–2500', src:3, cits:['APA_7','none']}
+  ]},
+  {id:'business', label:'商業企劃', icon:'💼', req_ref:false,
+   desc:'商業計畫、市場分析、可行性研究',
+   types:[
+    {id:'bz-plan',    label:'商業計畫書',   desc:'完整商業模式與財務規劃', model:'business_plan', wc:'3000–10000', src:8, cits:['APA_7','custom']},
+    {id:'bz-market',  label:'市場分析報告', desc:'市場規模、競爭分析', model:'exec_first', wc:'1500–4000', src:5, cits:['APA_7','custom']},
+    {id:'bz-feasible',label:'可行性研究',   desc:'技術、市場、財務可行性', model:'feasibility', wc:'2000–5000', src:8, cits:['APA_7','custom']},
+    {id:'bz-proposal',label:'專案提案書',   desc:'新專案或擴展計畫提案', model:'proposal', wc:'1000–3000', src:5, cits:['APA_7','custom']}
+  ]},
+  {id:'marketing', label:'行銷企劃', icon:'📣', req_ref:false,
+   desc:'行銷策略、活動企劃、品牌規劃',
+   types:[
+    {id:'mk-campaign', label:'行銷活動企劃書', desc:'活動主題、執行計畫、KPI', model:'campaign_plan', wc:'1500–4000', src:3, cits:['custom','none']},
+    {id:'mk-strategy', label:'品牌行銷策略',   desc:'品牌定位、STP、4P分析', model:'STP_4P', wc:'2000–5000', src:5, cits:['APA_7','custom']},
+    {id:'mk-content',  label:'內容行銷規劃',   desc:'內容日曆、SEO、社群策略', model:'content_calendar', wc:'1000–2500', src:3, cits:['custom','none']},
+    {id:'mk-report',   label:'行銷成效報告',   desc:'活動後數據分析與建議', model:'performance_report', wc:'1000–2500', src:3, cits:['custom','none']}
+  ]},
+  {id:'ie', label:'工業工程改善', icon:'⚙️', req_ref:false,
+   desc:'流程改善、品質管理、生產效率',
+   types:[
+    {id:'ie-kaizen',  label:'改善提案報告（PDCA）', desc:'問題診斷、改善方案、驗證', model:'PDCA', wc:'1000–3000', src:2, cits:['none']},
+    {id:'ie-lean',    label:'精實生產 / 5S 報告',   desc:'浪費識別、標準化流程', model:'lean_report', wc:'1000–2500', src:2, cits:['none']},
+    {id:'ie-quality', label:'品質管理報告（QCC）',   desc:'品管圈、8D、SPC分析', model:'8D_QCC', wc:'1500–3000', src:3, cits:['none']},
+    {id:'ie-process', label:'製程分析與優化',        desc:'工時研究、瓶頸分析', model:'process_analysis', wc:'1000–2500', src:2, cits:['none']}
+  ]},
+  {id:'safety', label:'職業安全衛生', icon:'🦺', req_ref:true,
+   desc:'工安法規、危害評估、安全管理',
+   types:[
+    {id:'sf-risk',    label:'危害鑑別與風險評估',    desc:'作業危害分析（JHA/JSA）', model:'risk_assessment', wc:'1500–4000', src:5, cits:['法規條文','APA_7']},
+    {id:'sf-accident',label:'職業災害調查報告',      desc:'事故原因分析與預防對策', model:'accident_report', wc:'1000–3000', src:3, cits:['法規條文','none']},
+    {id:'sf-manage',  label:'安全衛生管理計畫',      desc:'OHSAS/ISO 45001 系統計畫', model:'safety_plan', wc:'3000–8000', src:8, cits:['法規條文','APA_7']},
+    {id:'sf-drill',   label:'緊急應變計畫 / 演練',   desc:'應變程序、演練紀錄', model:'emergency_plan', wc:'1500–4000', src:3, cits:['法規條文','none']}
+  ]},
+  {id:'travel', label:'旅遊類別', icon:'✈️', req_ref:false,
+   desc:'旅遊規劃、導覽手冊、行程設計',
+   types:[
+    {id:'tv-itinerary',label:'旅遊行程規劃書', desc:'完整行程、景點、交通、費用', model:'itinerary', wc:'1000–3000', src:2, cits:['none']},
+    {id:'tv-guide',    label:'導覽解說手冊',   desc:'景點介紹、文化背景、導覽腳本', model:'guide_book', wc:'1500–4000', src:5, cits:['APA_7','none']},
+    {id:'tv-proposal', label:'旅遊企劃提案',   desc:'主題旅遊、客製行程企劃書', model:'travel_proposal', wc:'1000–2500', src:2, cits:['none']},
+    {id:'tv-report',   label:'旅遊考察報告',   desc:'參訪、考察、研習紀錄', model:'field_report', wc:'1000–2500', src:5, cits:['APA_7','none']}
+  ]}
+];
+
+const PPT_TYPES = [
+  {id:'academic_ppt',  label:'學術報告簡報',  desc:'論文口試、研討會發表', slides:'15–30張'},
+  {id:'edu_ppt',       label:'教學課程簡報',  desc:'課堂教學、培訓授課',   slides:'20–40張'},
+  {id:'biz_ppt',       label:'商業提案簡報',  desc:'商業計畫、客戶提案',   slides:'10–20張'},
+  {id:'marketing_ppt', label:'行銷活動簡報',  desc:'活動企劃、策略說明',   slides:'10–15張'},
+  {id:'ie_ppt',        label:'改善成果簡報',  desc:'PDCA成果、品管圈發表', slides:'10–20張'},
+  {id:'safety_ppt',    label:'安全教育訓練',  desc:'工安宣導、法規說明',   slides:'15–25張'},
+  {id:'travel_ppt',    label:'旅遊行程簡報',  desc:'行程介紹、景點說明',   slides:'10–25張'}
+];
+
+const CITE_LBL = {
+  'APA_7':'APA 7th','MLA_9':'MLA 9th','Chicago_17':'Chicago 17th',
+  'IEEE':'IEEE','GB_T_7714':'GB/T 7714','custom':'自訂格式',
+  '法規條文':'法規條文','none':'行文標注即可'
+};
+
+// ════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════
+const S = {
+  identity:null, age:null, role:null, travelGroup:null,
+  cat:null, type:null, cit:null,
+  ppt:false, pptType:null, slides:null, venue:null
+};
+
+// ════════════════════════════════════════
+// NAV
+// ════════════════════════════════════════
+function go(n) {
+  document.querySelectorAll('.page').forEach((p,i)=>p.classList.toggle('on',i===n));
+  document.querySelectorAll('.nav-i').forEach((v,i)=>{
+    v.classList.remove('on','ok');
+    if(i===n) v.classList.add('on');
+    else if(i<n) v.classList.add('ok');
+  });
+  window.scrollTo(0,0);
+}
+
+// ════════════════════════════════════════
+// P0 – AUDIENCE
+// ════════════════════════════════════════
+function initP0(){
+  renderCards('g-identity', IDENTITY, 'identity', 'selIdentity');
+  renderCards('g-age', AGE, 'age', 'selAge');
+  renderCards('g-role', ROLE, 'role', 'selRole');
+}
+
+function renderCards(gid, items, stateKey, fnName){
+  const g = document.getElementById(gid);
+  if(!g) return;
+  g.innerHTML = items.map(it=>`
+    <div class="card${S[stateKey]===it.id?' on':''}" onclick="${fnName}('${it.id}')">
+      ${it.icon?`<div class="c-icon">${it.icon}</div>`:''}
+      <div class="c-title">${it.label}</div>
+      ${it.desc?`<div class="c-desc">${it.desc}</div>`:''}
+    </div>`).join('');
+}
+
+function selIdentity(id){
+  S.identity=id; S.age=null; S.role=null; S.travelGroup=null;
+  renderCards('g-identity', IDENTITY, 'identity', 'selIdentity');
+
+  const isTravel = (id==='traveler');
+  document.getElementById('age-wrap').style.display='block';
+  renderCards('g-age', AGE, 'age', 'selAge');
+
+  document.getElementById('role-wrap').style.display = isTravel?'none':'block';
+  document.getElementById('travel-group-wrap').style.display = isTravel?'block':'none';
+
+  if(!isTravel){
+    renderCards('g-role', ROLE, 'role', 'selRole');
+  } else {
+    renderTravelGroup();
+  }
+  checkP0();
+}
+
+function renderTravelGroup(){
+  const g=document.getElementById('g-travel-group');
+  if(!g) return;
+  g.innerHTML=TRAVEL_GROUP.map(tg=>`
+    <div class="card${S.travelGroup===tg.id?' on':''}" onclick="selTravelGroup('${tg.id}')">
+      <div class="c-icon">${tg.icon}</div>
+      <div class="c-title">${tg.label}</div>
+      <div class="c-desc">${tg.desc}</div>
+    </div>`).join('');
+}
+
+function selTravelGroup(id){
+  S.travelGroup=id; S.role='travel_group';
+  renderTravelGroup();
+  checkP0();
+}
+function selAge(id){S.age=id; renderCards('g-age',AGE,'age','selAge'); checkP0();}
+function selRole(id){S.role=id; renderCards('g-role',ROLE,'role','selRole'); checkP0();}
+function checkP0(){
+  const isTravel=(S.identity==='traveler');
+  const roleOk = isTravel ? !!S.travelGroup : !!S.role;
+  document.getElementById('btn01').disabled=!(S.identity&&S.age&&roleOk);
+}
+
+// ════════════════════════════════════════
+// P1 – CATEGORY
+// ════════════════════════════════════════
+function initP1(){
+  const g=document.getElementById('g-cat');
+  g.innerHTML=CATS.map(c=>`
+    <div class="card${S.cat===c.id?' on':''}" onclick="selCat('${c.id}')">
+      <div class="c-icon">${c.icon}</div>
+      <div class="c-title">${c.label}</div>
+      <div class="c-desc">${c.desc}</div>
+      <span class="c-badge ${c.req_ref?'badge-ref':'badge-noref'}">${c.req_ref?'需參考文獻':'無需文獻格式'}</span>
+    </div>`).join('');
+}
+function selCat(id){
+  S.cat=id; S.type=null; S.cit=null;
+  initP1();
+  document.getElementById('btn12').disabled=false;
+}
+
+// ════════════════════════════════════════
+// P2 – TYPE
+// ════════════════════════════════════════
+function initP2(){
+  const cat=CATS.find(x=>x.id===S.cat);
+  if(!cat)return;
+  document.getElementById('p2-title').textContent=cat.label+'　細項選擇';
+  document.getElementById('p2-sub').textContent=`共 ${cat.types.length} 種類型，請選擇最符合的`;
+  const tg=document.getElementById('g-type');
+  tg.innerHTML=cat.types.map(t=>`
+    <div class="card${S.type===t.id?' on':''}" onclick="selType('${t.id}')">
+      <div class="c-title">${t.label}</div>
+      <div class="c-desc">${t.desc}</div>
+      <div class="c-meta">📝 ${t.wc} 字　📚 最少 ${t.src} 筆來源</div>
+    </div>`).join('');
+  document.getElementById('p2-info').innerHTML='';
+  document.getElementById('cit-wrap').style.display='none';
+  document.getElementById('btn23').disabled=true;
+}
+
+function selType(id){
+  S.type=id; S.cit=null;
+  const cat=CATS.find(x=>x.id===S.cat);
+  const t=cat.types.find(x=>x.id===id);
+  // re-render
+  document.getElementById('g-type').innerHTML=cat.types.map(tp=>`
+    <div class="card${S.type===tp.id?' on':''}" onclick="selType('${tp.id}')">
+      <div class="c-title">${tp.label}</div>
+      <div class="c-desc">${tp.desc}</div>
+      <div class="c-meta">📝 ${tp.wc} 字　📚 最少 ${tp.src} 筆來源</div>
+    </div>`).join('');
+  // info
+  const ib=document.getElementById('p2-info');
+  if(cat.req_ref){
+    ib.innerHTML=`<div class="info info-a">⚠️ 此類型需附正式<strong>參考文獻（References）</strong>，請在下方選擇引用格式。最少需要 <strong>${t.src}</strong> 筆來源。</div>`;
+    document.getElementById('cit-wrap').style.display='block';
+    S.cit=t.cits[0];
+    document.getElementById('g-cit').innerHTML=t.cits.map(c=>`
+      <div class="pill${S.cit===c?' on':''}" onclick="selCit('${c}')">${CITE_LBL[c]||c}</div>`).join('');
+  } else if(t.src>0){
+    ib.innerHTML=`<div class="info info-g">✓ 此類型建議引用來源但無需正式文獻格式，來源標注於行文即可。建議蒐集至少 ${t.src} 筆參考資料。</div>`;
+    document.getElementById('cit-wrap').style.display='none';
+    S.cit='none';
+  } else {
+    ib.innerHTML=`<div class="info info-g">✓ 此類型不需引用來源。</div>`;
+    document.getElementById('cit-wrap').style.display='none';
+    S.cit='none';
+  }
+  document.getElementById('btn23').disabled=false;
+}
+function selCit(id){
+  S.cit=id;
+  const cat=CATS.find(x=>x.id===S.cat);
+  const t=cat.types.find(x=>x.id===S.type);
+  document.getElementById('g-cit').innerHTML=t.cits.map(c=>`
+    <div class="pill${S.cit===c?' on':''}" onclick="selCit('${c}')">${CITE_LBL[c]||c}</div>`).join('');
+}
+
+// ════════════════════════════════════════
+// P3 – PPT
+// ════════════════════════════════════════
+function initP3(){
+  document.getElementById('g-pptyn').innerHTML=`
+    <div class="card${S.ppt===false?' on':''}" onclick="selPptYn(false)"><div class="c-title">不製作簡報</div><div class="c-desc">僅輸出報告 YAML</div></div>
+    <div class="card${S.ppt===true?' on':''}" onclick="selPptYn(true)"><div class="c-title">同時製作簡報</div><div class="c-desc">加入對應投影片架構</div></div>`;
+
+  document.getElementById('g-ppttype').innerHTML=PPT_TYPES.map(p=>`
+    <div class="card${S.pptType===p.id?' on':''}" onclick="selPptType('${p.id}')">
+      <div class="c-title">${p.label}</div>
+      <div class="c-desc">${p.desc}</div>
+      <div class="c-meta">${p.slides}</div>
+    </div>`).join('');
+
+  const slideOpts=['10張以下','10–20張','20–30張','30張以上'];
+  document.getElementById('g-slides').innerHTML=slideOpts.map(s=>`
+    <div class="pill${S.slides===s?' on':''}" onclick="selSlides('${s}')">${s}</div>`).join('');
+
+  const venueOpts=['課堂 / 授課','論文口試','研討會','公司內部','客戶簡報','公開活動'];
+  document.getElementById('g-venue').innerHTML=venueOpts.map(v=>`
+    <div class="pill${S.venue===v?' on':''}" onclick="selVenue('${v}')">${v}</div>`).join('');
+}
+
+function selPptYn(val){
+  S.ppt=val;
+  initP3();
+  document.getElementById('ppt-detail').style.display=val?'block':'none';
+}
+function selPptType(id){S.pptType=id;initP3();document.getElementById('ppt-detail').style.display='block'}
+function selSlides(v){S.slides=v;const s=document.getElementById('g-slides').querySelectorAll('.pill');s.forEach(p=>p.classList.toggle('on',p.textContent===v))}
+function selVenue(v){S.venue=v;const s=document.getElementById('g-venue').querySelectorAll('.pill');s.forEach(p=>p.classList.toggle('on',p.textContent===v))}
+
+// ════════════════════════════════════════
+// YAML BUILDER
+// ════════════════════════════════════════
+function buildYAML(){
+  const cat  = CATS.find(x=>x.id===S.cat);
+  const type = cat.types.find(x=>x.id===S.type);
+  const ident= IDENTITY.find(x=>x.id===S.identity);
+  const age  = AGE.find(x=>x.id===S.age);
+  const isTravel = S.identity==='traveler';
+  const tgObj = isTravel && S.travelGroup ? TRAVEL_GROUP.find(x=>x.id===S.travelGroup) : null;
+  const roleLabel = tgObj ? tgObj.label : (ROLE.find(x=>x.id===S.role)||{label:''}).label;
+
+  const title   = v('f-title')||'（未填寫）';
+  const sub     = v('f-sub');
+  const author  = v('f-author');
+  const org     = v('f-org');
+  const advisor = v('f-advisor');
+  const date    = v('f-date');
+  const conf    = v('f-conf');
+  const lang    = v('f-lang');
+  const kw      = v('f-kw');
+  const other   = v('f-other');
+  // keywords: user-supplied → use as-is; blank → auto_extract flag
+  const kwArr   = kw?kw.split(',').map(t=>t.trim()).filter(Boolean):[];
+  const kwYAML  = kwArr.length?`[${kwArr.map(t=>`"${t}"`).join(', ')}]`:'auto_extract';
+  const needRef = cat.req_ref;
+  const cit     = S.cit||'none';
+  const wcParts = type.wc.includes('–')?type.wc.split('–'):[type.wc,type.wc];
+  const srcN    = Math.max(2,Math.min(type.src,4));
+  const pptType = S.ppt&&S.pptType?PPT_TYPES.find(x=>x.id===S.pptType):null;
+
+  // fname
+  const fname = `${S.cat}_${S.type}.yaml`;
+  document.getElementById('yaml-fname').textContent = fname;
+
+  document.getElementById('chips').innerHTML=[
+    `<span class="chip">👤 ${ident.label} · ${age.label}</span>`,
+    tgObj?`<span class="chip">${tgObj.icon} ${tgObj.label}</span>`:`<span class="chip">📋 ${roleLabel}</span>`,
+    `<span class="chip">${cat.icon} ${cat.label}　${type.label}</span>`,
+    `<span class="chip">📏 ${type.wc} 字</span>`,
+    needRef?`<span class="chip">📚 ${CITE_LBL[cit]||cit}</span>`:'',
+    S.ppt&&pptType?`<span class="chip">🖥 ${pptType.label}</span>`:''
+  ].join('');
+
+  let y='';
+  const ln = s => y+=s+'\n';
+  const sec = s => y+=`\n  # ── ${s} ${'─'.repeat(Math.max(0,44-s.length))}\n`;
+
+  ln(`# ${'═'.repeat(58)}`);
+  ln(`# 報告 YAML 設定檔`);
+  ln(`# 類型：${cat.label}　${type.label}`);
+  ln(`# 受眾：${ident.label}（${age.label}）· ${roleLabel}`);
+  ln(`# 產生日期：${date}`);
+  ln(`# ${'═'.repeat(58)}\n`);
+  ln(`report:`);
+
+  // METADATA
+  sec('基本資訊');
+  ln(`  metadata:`);
+  ln(`    title: "${title}"`);
+  if(sub) ln(`    subtitle: "${sub}"`);
+  ln(`    report_type_id: "${type.id}"`);
+  ln(`    report_type_label: "${type.label}"`);
+  ln(`    category_id: "${cat.id}"`);
+  ln(`    category_label: "${cat.label}"`);
+  ln(`    structure_model: "${type.model}"`);
+  ln(`    audience:`);
+  ln(`      identity: "${ident.label}"`);
+  ln(`      age_group: "${age.label}"`);
+  if(tgObj){
+    ln(`      travel_group_type: "${tgObj.id}"`);
+    ln(`      travel_group_label: "${tgObj.label}"`);
+    ln(`      travel_group_desc: "${tgObj.desc}"`);
+  } else {
+    ln(`      role: "${roleLabel}"`);
+  }
+  ln(`    author:`);
+  ln(`      name: "${author}"`);
+  if(org)     ln(`      organization: "${org}"`);
+  if(advisor) ln(`      advisor: "${advisor}"`);
+  if(date)    ln(`    date:\n      created: "${date}"\n      submitted: ""\n      revised: ""`);
+  if(lang)    ln(`    language: "${lang}"`);
+  if(conf)    ln(`    confidentiality: "${conf}"`);
+  ln(`    keywords: ${kwYAML}${kwYAML==='auto_extract'?'   # 留白 → 系統依文章內容自動提取':''}`);
+
+
+  // SUMMARY
+  sec('摘要');
+  ln(`  summary:`);
+  ln(`    abstract: auto_extract   # 系統依文章內容自動提取`);
+  ln(`    research_question: ""   # 研究問題 / 核心主張`);
+  ln(`    key_findings:`);
+  ln(`      - finding: ""`);
+  ln(`      - finding: ""`);
+  ln(`      - finding: ""`);
+  if(other){
+    ln(`    other_requirements: "${other.replace(/\n/g,' ')}"`);
+  }
+
+  // SOURCES
+  sec('來源資料（整理用）');
+  ln(`  sources:`);
+  for(let i=1;i<=srcN;i++){
+    const sid=`S${String(i).padStart(3,'0')}`;
+    ln(`    - source_id: "${sid}"`);
+    ln(`      type: ""   # journal / book / news / report / website / law / interview / dataset`);
+    ln(`      title: ""`);
+    ln(`      author: ""`);
+    ln(`      year: ""`);
+    ln(`      publisher: ""`);
+    ln(`      url: ""`);
+    if(needRef)ln(`      doi: ""`);
+    ln(`      accessed_date: ""`);
+    ln(`      credibility: 0   # 1~5（5最高）`);
+    ln(`      key_content: ""   # 此來源的重點摘要`);
+    ln(`      used_in: []   # 使用於哪些章節`);
+    if(i<srcN)ln('');
+  }
+
+  // STRUCTURE – depends on type
+  sec('文章架構');
+  ln(`  structure:`);
+  buildStructure(y, type, cat, needRef);
+  // because buildStructure appends to y via ln, we rebuild here inline:
+  y += getStructure(type, cat);
+
+  // REFERENCES
+  if(needRef){
+    sec('參考文獻');
+    y+=`  references:\n`;
+    y+=`    citation_style: "${cit}"\n`;
+    y+=`    minimum_sources: ${type.src}\n`;
+    y+=`    auto_generate: true   # 依 sources 區自動生成格式\n`;
+    y+=`    entries:\n`;
+    for(let i=1;i<=srcN;i++){
+      const rid=`R${String(i).padStart(3,'0')}`;
+      const sid=`S${String(i).padStart(3,'0')}`;
+      y+=`      - ref_id: "${rid}"\n`;
+      y+=`        source_id: "${sid}"\n`;
+      y+=`        formatted_citation: ""\n`;
+    }
+    if(S.cat==='academic'){
+      y+=`    appendix:\n`;
+      y+=`      - title: "附錄一"\n`;
+      y+=`        content: ""\n`;
+    }
+    y+='\n';
+  }
+
+  // PPT BLOCK
+  if(S.ppt && pptType){
+    sec('簡報架構設定');
+    y+=`  presentation:\n`;
+    y+=`    enabled: true\n`;
+    y+=`    type: "${pptType.id}"\n`;
+    y+=`    type_label: "${pptType.label}"\n`;
+    y+=`    target_slides: "${S.slides||pptType.slides}"\n`;
+    y+=`    venue: "${S.venue||''}"\n`;
+    y+=`    slides_structure:\n`;
+    y+=getPptStructure(S.cat, S.type);
+    y+='\n';
+  }
+
+  // FORMAT
+  sec('格式規範');
+  y+=`  format:\n`;
+  y+=`    total_word_count:\n`;
+  y+=`      min: ${wcParts[0]||500}\n`;
+  y+=`      max: ${wcParts[1]||2000}\n`;
+  y+=`    heading_levels: ${S.cat==='academic'?4:3}\n`;
+  y+=`    paragraph_max_sentences: 5\n`;
+  y+=`    citation_inline: "${cit==='none'?'none':'author_year'}"\n`;
+  y+=`    language_tone: "${getTone()}"\n`;
+  y+=`    media:\n`;
+  y+=`      tables: false\n`;
+  y+=`      charts: false\n`;
+  y+=`      images: false\n`;
+
+  // CHECKLIST
+  sec('品質查核');
+  y+=`  quality_checklist:\n`;
+  y+=`    sources_verified: false\n`;
+  y+=`    facts_cross_checked: false\n`;
+  y+=`    structure_complete: false\n`;
+  y+=`    audience_tone_matched: false\n`;
+  y+=`    word_count_ok: false\n`;
+  y+=`    grammar_checked: false\n`;
+  if(needRef){
+    y+=`    references_complete: false\n`;
+    y+=`    citations_formatted: false\n`;
+  }
+  if(S.ppt) y+=`    slides_ready: false\n`;
+
+  document.getElementById('yaml-out').textContent = y.trimEnd();
+}
+
+function getStructure(type, cat){
+  let s='';
+  const t=type.id;
+
+  if(cat.id==='academic'){
+    if(t==='ac-thesis'||t==='ac-paper'){
+      s+=`    ch1_introduction:\n      research_background: ""\n      problem_statement: ""\n      research_objectives: []\n      research_scope: ""\n      definition_of_terms: []\n`;
+      s+=`    ch2_literature_review:\n      themes: []\n      research_gap: ""\n      theoretical_framework: ""\n`;
+      s+=`    ch3_methodology:\n      research_design: ""\n      data_collection: ""\n      analysis_method: ""\n      validity: ""\n`;
+      s+=`    ch4_results:\n      findings: []\n      data_analysis: ""\n      tables_figures: []\n`;
+      s+=`    ch5_conclusion:\n      summary: ""\n      implications: ""\n      limitations: ""\n      future_research: ""\n`;
+    } else {
+      s+=`    opening:\n      type: "background"\n      content: ""\n`;
+      s+=`    body:\n      sections:\n        - heading: ""\n          type: "analysis"\n          content: ""\n          source_ids: []\n        - heading: ""\n          type: "evidence"\n          content: ""\n          source_ids: []\n`;
+      s+=`    closing:\n      type: "conclusion"\n      content: ""\n`;
+    }
+  } else if(cat.id==='education'){
+    if(t==='ed-quiz'){
+      s+=`    quiz_settings:\n      total_questions: 0\n      question_types:\n        multiple_choice: 0   # 選擇題\n        true_false: 0        # 是非題\n        short_answer: 0      # 問答題\n        fill_in: 0           # 填空題\n        essay: 0             # 申論題\n      difficulty:\n        easy: 0\n        medium: 0\n        hard: 0\n      time_limit_minutes: 0\n      passing_score: 0\n    questions:\n      - q_id: "Q001"\n        type: "multiple_choice"\n        content: ""\n        options: ["A.", "B.", "C.", "D."]\n        answer: ""\n        explanation: ""\n        source_id: ""\n      - q_id: "Q002"\n        type: "multiple_choice"\n        content: ""\n        options: ["A.", "B.", "C.", "D."]\n        answer: ""\n        explanation: ""\n        source_id: ""\n`;
+    } else {
+      s+=`    opening:\n      learning_objectives: []\n      prerequisites: ""\n`;
+      s+=`    body:\n      units:\n        - unit_id: "U01"\n          title: ""\n          key_concepts: []\n          content: ""\n          examples: []\n          exercises: []\n        - unit_id: "U02"\n          title: ""\n          key_concepts: []\n          content: ""\n          examples: []\n          exercises: []\n`;
+      s+=`    closing:\n      summary: ""\n      assessment: ""\n`;
+    }
+  } else if(cat.id==='business'){
+    s+=`    executive_summary: ""\n`;
+    s+=`    body:\n      sections:\n        - heading: "背景與問題描述"\n          content: ""\n        - heading: "市場 / 環境分析（SWOT）"\n          content: ""\n          swot:\n            strengths: []\n            weaknesses: []\n            opportunities: []\n            threats: []\n        - heading: "解決方案 / 商業模式"\n          content: ""\n        - heading: "財務規劃"\n          content: ""\n          financials:\n            startup_cost: ""\n            revenue_forecast: ""\n            break_even: ""\n        - heading: "執行計畫與時程"\n          content: ""\n`;
+    s+=`    closing:\n      conclusion: ""\n      next_steps: []\n`;
+  } else if(cat.id==='marketing'){
+    s+=`    overview: ""\n`;
+    s+=`    body:\n      sections:\n        - heading: "市場分析與目標客群（STP）"\n          segmentation: ""\n          targeting: ""\n          positioning: ""\n        - heading: "行銷策略（4P / 4C）"\n          product: ""\n          price: ""\n          place: ""\n          promotion: ""\n        - heading: "執行計畫"\n          timeline: []\n          budget: ""\n          channels: []\n        - heading: "KPI 與成效指標"\n          metrics: []\n`;
+    s+=`    closing:\n      conclusion: ""\n      risk: ""\n`;
+  } else if(cat.id==='ie'){
+    s+=`    problem_definition:\n      background: ""\n      current_status: ""\n      problem_statement: ""\n`;
+    s+=`    body:\n      sections:\n        - heading: "現況分析"\n          content: ""\n          data: []\n        - heading: "原因分析（魚骨圖 / 5Why）"\n          causes: []\n        - heading: "改善方案"\n          actions: []\n        - heading: "實施與驗證（Do / Check）"\n          content: ""\n          before_after: []\n        - heading: "標準化 / 行動計畫（Act）"\n          standard: ""\n          next_steps: []\n`;
+    s+=`    closing:\n      results: ""\n      savings: ""\n`;
+  } else if(cat.id==='safety'){
+    s+=`    opening:\n      scope: ""\n      applicable_law: ""   # 適用法規條文\n      responsible_person: ""\n`;
+    s+=`    body:\n      sections:\n        - heading: "作業流程說明"\n          content: ""\n        - heading: "危害鑑別清單"\n          hazards:\n            - hazard_id: "H001"\n              description: ""\n              hazard_type: ""   # 化學/物理/生物/人因/環境\n              existing_controls: ""\n        - heading: "風險評估矩陣"\n          assessment:\n            - hazard_id: "H001"\n              likelihood: 0   # 1~5\n              severity: 0     # 1~5\n              risk_level: ""  # 高/中/低\n              control_measure: ""\n        - heading: "緊急應變措施"\n          content: ""\n        - heading: "教育訓練紀錄"\n          content: ""\n`;
+    s+=`    closing:\n      review_date: ""\n      approver: ""\n`;
+  } else if(cat.id==='travel'){
+    const tg = S.travelGroup||'solo';
+    // group-specific trip_info fields
+    const groupFields = {
+      couple:  `      romance_priority: true\n      room_type: "雙人房（浪漫景觀）"\n      special_occasions: ""\n`,
+      solo:    `      flexibility: "高"\n      solo_safety_notes: ""\n      backup_contacts: []\n`,
+      family:  `      children_ages: []\n      stroller_accessible: false\n      child_friendly_required: true\n`,
+      clan:    `      family_units: 0   # 幾個家庭\n      total_members: 0\n      accessibility_required: false\n      elder_members: 0\n`,
+      friends: `      group_size: 0\n      activity_preference: ""   # 冒險/文化/美食/夜生活\n      shared_cost: true\n`,
+      seniors: `      mobility_level: ""   # 良好/一般/需輪椅\n      medical_notes: ""\n      rest_frequency: ""   # 多久休息一次\n      no_stairs: false\n`,
+      school:  `      institution: ""\n      grade_level: ""\n      supervisor_count: 0\n      educational_objectives: []\n`
+    };
+    if(t==='tv-itinerary'){
+      s+=`    trip_info:\n      destination: ""\n      duration_days: 0\n      total_pax: 0\n      group_type: "${tg}"\n`;
+      s+=      groupFields[tg]||'';
+      s+=`      budget_per_person: ""\n      transportation: ""\n      accommodation_type: ""\n`;
+      s+=`    body:\n      itinerary:\n`;
+      s+=`        - day: 1\n          date: ""\n          morning:\n            activity: ""\n            location: ""\n            duration: ""\n          afternoon:\n            activity: ""\n            location: ""\n            duration: ""\n          evening:\n            activity: ""\n            location: ""\n            duration: ""\n          accommodation: ""\n          meals:\n            breakfast: ""\n            lunch: ""\n            dinner: ""\n          estimated_cost: ""\n          group_notes: ""   # 針對 ${tg} 的特別提醒\n`;
+      s+=`        - day: 2\n          date: ""\n          morning:\n            activity: ""\n            location: ""\n            duration: ""\n          afternoon:\n            activity: ""\n            location: ""\n            duration: ""\n          evening:\n            activity: ""\n            location: ""\n            duration: ""\n          accommodation: ""\n          meals:\n            breakfast: ""\n            lunch: ""\n            dinner: ""\n          estimated_cost: ""\n          group_notes: ""\n`;
+      s+=`    closing:\n      total_budget: ""\n      packing_list: []\n      emergency_contacts: []\n      insurance: ""\n`;
+    } else {
+      s+=`    opening:\n      destination_overview: ""\n      target_group: "${tg}"\n`;
+      s+=`    body:\n      sections:\n        - heading: "目的地介紹"\n          content: ""\n          source_ids: []\n        - heading: "景點 / 活動說明"\n          attractions:\n            - name: ""\n              description: ""\n              duration: ""\n              group_tip: ""   # 適合 ${tg} 的建議\n        - heading: "文化 / 歷史背景"\n          content: ""\n`;
+      s+=`    closing:\n      practical_info: ""\n      group_specific_notes: ""   # ${tg} 專屬注意事項\n      emergency: ""\n`;
+    }
+  }
+  return s;
+}
+
+function getPptStructure(catId, typeId){
+  const structures = {
+    'academic':`      - slide: "封面"\n      - slide: "研究動機與問題"\n      - slide: "文獻回顧"\n      - slide: "研究方法"\n      - slide: "研究結果"\n      - slide: "討論"\n      - slide: "結論與建議"\n      - slide: "參考文獻"\n`,
+    'education':`      - slide: "封面 / 課程主題"\n      - slide: "學習目標"\n      - slide: "核心概念一"\n      - slide: "核心概念二"\n      - slide: "案例 / 練習"\n      - slide: "重點總結"\n      - slide: "作業 / 評量說明"\n`,
+    'business':`      - slide: "封面"\n      - slide: "問題 / 機會說明"\n      - slide: "解決方案"\n      - slide: "市場分析（SWOT）"\n      - slide: "商業模式"\n      - slide: "財務預測"\n      - slide: "執行時程"\n      - slide: "結論與下一步"\n`,
+    'marketing':`      - slide: "封面"\n      - slide: "市場洞察"\n      - slide: "目標客群"\n      - slide: "行銷策略"\n      - slide: "執行計畫"\n      - slide: "預算規劃"\n      - slide: "KPI 指標"\n      - slide: "結論"\n`,
+    'ie':`      - slide: "封面"\n      - slide: "問題現況"\n      - slide: "原因分析"\n      - slide: "改善方案"\n      - slide: "執行成果對比"\n      - slide: "效益評估"\n      - slide: "標準化 / 結論"\n`,
+    'safety':`      - slide: "封面"\n      - slide: "法規依據"\n      - slide: "危害鑑別"\n      - slide: "風險矩陣"\n      - slide: "控制措施"\n      - slide: "緊急應變"\n      - slide: "結論 / Q&A"\n`,
+    'travel':`      - slide: "封面"\n      - slide: "目的地概覽"\n      - slide: "行程總覽"\n      - slide: "景點介紹一"\n      - slide: "景點介紹二"\n      - slide: "費用說明"\n      - slide: "注意事項"\n`
+  };
+  return structures[catId]||`      - slide: "封面"\n      - slide: "主要內容"\n      - slide: "結論"\n`;
+}
+
+function buildStructure(){}  // placeholder, actual logic in getStructure
+
+function getTone(){
+  if(S.identity==='traveler'){
+    const toneMap={couple:'浪漫溫馨',solo:'輕鬆自由',family:'活潑親子',clan:'溫馨包容',friends:'活力歡樂',seniors:'舒適悠閒',school:'知識豐富'};
+    return toneMap[S.travelGroup]||'輕鬆易讀';
+  }
+  const m={student:'學術正式',teacher:'教育引導',researcher:'客觀嚴謹',engineer:'技術精確',manager:'商業簡潔'};
+  return m[S.identity]||'正式';
+}
+
+function v(id){return document.getElementById(id).value.trim()}
+function today(){return new Date().toISOString().split('T')[0]}
+
+function checkP4(){
+  const ok = v('f-title')&&v('f-author');
+  document.getElementById('btn-gen').disabled=!ok;
+  document.getElementById('f-required-hint').style.display=ok?'none':'block';
+}
+function tryGenerate(){
+  if(!v('f-title')||!v('f-author')){
+    document.getElementById('f-required-hint').style.display='block';
+    return;
+  }
+  buildYAML();go(5);
+}
+function copyYAML(){
+  navigator.clipboard.writeText(document.getElementById('yaml-out').textContent).then(()=>{
+    const t=document.getElementById('toast');
+    t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'),2200);
+  });
+}
+
+// ════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════
+initP0();
+initP1();
+document.getElementById('f-date').value=today();
+
+// Hook nav clicks to init pages on demand
+document.getElementById('n1').addEventListener('click',initP1);
+document.getElementById('n2').addEventListener('click',initP2);
+document.getElementById('n3').addEventListener('click',initP3);
+document.getElementById('btn12').addEventListener('click',initP2);
+document.getElementById('btn23').addEventListener('click',initP3);
+document.getElementById('btn34').addEventListener('click',()=>{});
+</script>
+</body>
+</html>
