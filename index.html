@@ -296,7 +296,8 @@ const IDENTITY = [
   {id:'researcher', label:'研究人員',    desc:'學術研究、論文撰寫'},
   {id:'engineer',   label:'工程師 / 技術人員', desc:'工業、品質、安衛領域'},
   {id:'manager',    label:'管理 / 企劃人員', desc:'商業、行銷、專案管理'},
-  {id:'traveler',   label:'旅遊從業 / 導覽', desc:'旅遊規劃、導覽手冊'}
+  {id:'traveler',   label:'旅遊從業 / 導覽', desc:'旅遊規劃、導覽手冊'},
+  {id:'general',    label:'一般民眾',    desc:'無特定專業背景之社會大眾'}
 ];
 
 const AGE = [
@@ -512,14 +513,14 @@ function selCat(id){
 function initP2(){
   const cat=CATS.find(x=>x.id===S.cat);
   if(!cat)return;
-  document.getElementById('p2-title').textContent=cat.label+'　細項選擇';
+  document.getElementById('p2-title').textContent=cat.label+' 細項選擇';
   document.getElementById('p2-sub').textContent=`共 ${cat.types.length} 種類型，請選擇最符合的`;
   const tg=document.getElementById('g-type');
   tg.innerHTML=cat.types.map(t=>`
     <div class="card${S.type===t.id?' on':''}" onclick="selType('${t.id}')">
       <div class="c-title">${t.label}</div>
       <div class="c-desc">${t.desc}</div>
-      <div class="c-meta">📝 ${t.wc} 字　📚 最少 ${t.src} 筆來源</div>
+      <div class="c-meta">📝 ${t.wc} 字 📚 最少 ${t.src} 筆來源</div>
     </div>`).join('');
   document.getElementById('p2-info').innerHTML='';
   document.getElementById('cit-wrap').style.display='none';
@@ -535,7 +536,7 @@ function selType(id){
     <div class="card${S.type===tp.id?' on':''}" onclick="selType('${tp.id}')">
       <div class="c-title">${tp.label}</div>
       <div class="c-desc">${tp.desc}</div>
-      <div class="c-meta">📝 ${tp.wc} 字　📚 最少 ${tp.src} 筆來源</div>
+      <div class="c-meta">📝 ${tp.wc} 字 📚 最少 ${tp.src} 筆來源</div>
     </div>`).join('');
   // info
   const ib=document.getElementById('p2-info');
@@ -635,7 +636,7 @@ function buildYAML(){
   document.getElementById('chips').innerHTML=[
     `<span class="chip">👤 ${ident.label} · ${age.label}</span>`,
     tgObj?`<span class="chip">${tgObj.icon} ${tgObj.label}</span>`:`<span class="chip">📋 ${roleLabel}</span>`,
-    `<span class="chip">${cat.icon} ${cat.label}　${type.label}</span>`,
+    `<span class="chip">${cat.icon} ${cat.label} ${type.label}</span>`,
     `<span class="chip">📏 ${type.wc} 字</span>`,
     needRef?`<span class="chip">📚 ${CITE_LBL[cit]||cit}</span>`:'',
     S.ppt&&pptType?`<span class="chip">🖥 ${pptType.label}</span>`:''
@@ -647,7 +648,7 @@ function buildYAML(){
 
   ln(`# ${'═'.repeat(58)}`);
   ln(`# 報告 YAML 設定檔`);
-  ln(`# 類型：${cat.label}　${type.label}`);
+  ln(`# 類型：${cat.label} ${type.label}`);
   ln(`# 受眾：${ident.label}（${age.label}）· ${roleLabel}`);
   ln(`# 產生日期：${date}`);
   ln(`# ${'═'.repeat(58)}\n`);
